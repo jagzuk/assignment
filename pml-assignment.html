@@ -73,7 +73,7 @@ suppressPackageStartupMessages(library(rpart))
 suppressPackageStartupMessages(library(FSelector))</code></pre>
 <div id="executive-summary" class="section level2">
 <h2>Executive Summary</h2>
-<p>The quantified self movement describes enthusiasts who take measurements about themselves regularly to improve their health or fitness. Whilst people regularly quantify how much of a particular activity they do, but they rarely quantify how well they do it. The goal of this assigment is to build a machine learning model that presdicts how well a participant has performed a Weight Lifting Excercise.</p>
+<p>The quantified self movement describes enthusiasts who take measurements about themselves regularly to improve their health or fitness. Whilst people regularly quantify how much of a particular activity they do, they rarely quantify how well they do it. The goal of this assigment is to build a machine learning model that predicts how well a participant has performed a Weight Lifting Excercise.</p>
 <p>The data was downloaded from the source and reviewed for completeness. This revealed that there were 160 columns in the dataset. Using data cleanup and feature selection, this was reduced to 50.</p>
 <p>The data was partitioned into training and validation sets, and two models were built using the Recursive Partitioning and Regression Trees (rpart) and Random Forest methods. The Random Forest significantly outperformed the rpart model and was selected for further use.</p>
 <p>Answers produced by applying the Random Forest model to the testing data were submitted to Coursera and achieved a 20/20 score.</p>
@@ -84,9 +84,9 @@ suppressPackageStartupMessages(library(FSelector))</code></pre>
 <p>The Weight Lifting data used for this report was origninally sourced from the <a href="http://groupware.les.inf.puc-rio.br/har">Human Activity Recognistion Project by LES</a>, and consists of a training set and associated test set. The data was collected from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. Each lift has an assigned quality score, which is the classe variable.</p>
 <pre class="r"><code>pml.training &lt;- read.csv(&quot;pml-training.csv&quot;, header=T)   # Read training data
 pml.testing &lt;- read.csv(&quot;pml-testing.csv&quot;, header=T)     # Read testing data</code></pre>
-<p>A summary of the supplier data can be found in the Dataset Structure section of the Appendices.The training set contains 19622 rows and the test set contains 20 rows, each comprising 160 columns.</p>
-<p>Inspection shoes that some records contain “#DIV/0!” values which may cause computational problems. There are also many empty values and many NAs. The emply and error value have both been replaced with NA.</p>
-<p>With this addjustment made, further inspection shows that a large number of the columns are predominently contain NAs. Since NA values are of no value to the model, these columns have been removed from the dataset.</p>
+<p>A summary of the supplied data can be found in the Dataset Structure section of the Appendices. The training set contains 19622 rows and the test set contains 20 rows, each comprising 160 columns.</p>
+<p>Inspection shows that some records contain “#DIV/0!” values which may cause computational problems. There are also many empty values and many NAs. The emply and error value have both been replaced with NA.</p>
+<p>With these adjustments made, further inspection shows that a large number of the columns predominently contain NAs. Since NA values are of no value to the model, these columns have been removed from the dataset, along with timestamps and other non-performance variables.</p>
 <pre class="r"><code># Remove id time-series and window columns
 pml.training &lt;- select(pml.training, -X,-raw_timestamp_part_1,-raw_timestamp_part_2,-cvtd_timestamp,-new_window,-num_window)
 
@@ -105,7 +105,7 @@ cols.clean                                                  # Number of columns 
 <h2>Preprocessing</h2>
 <div id="validation-dataset" class="section level3">
 <h3>Validation Dataset</h3>
-<p>We need some data (not pml.testing) for model evaluation, the first thing is to create new training and validation datasets. This can be done using <strong>createDataPartion</strong> from the <strong>caret</strong> package:</p>
+<p>A dataset is requied for model evaluation, so the next task is to create new training and validation datasets. This can be done using <strong>createDataPartion</strong> from the <strong>caret</strong> package:</p>
 <pre class="r"><code># Partiton the data 2/3 testing 1/3 validation (classe is our &quot;quality&quot;&quot; variable) 
 pml.partition &lt;- createDataPartition(y = pml.training.clean$classe, p=0.66, list = F)
 training &lt;- pml.training.clean[pml.partition, ]              # Create new traning dataset
@@ -125,23 +125,14 @@ validation &lt;- validation[ ,model.features]
 count.features &lt;- ncol(training)
 count.features</code></pre>
 <pre><code>## [1] 50</code></pre>
-<p>This process has reduced the features a little further, leaving ’r count.features` columns.</p>
+<p>This process has reduced the features a little further, leaving 50 columns.</p>
 </div>
 <div id="model-selection" class="section level2">
 <h2>Model Selection</h2>
 <p>Two models are now built, using Recursive Partitioning and Regression Trees (rpart) and Random Forest functions provided in the caret package. This process takes several hours to complete.</p>
 <pre class="r"><code>fit.rpart &lt;- train(classe ~.,data=training, method=&quot;rpart&quot;)  # rpart
-fit.rf &lt;- train(classe ~ ., method=&quot;rf&quot;, trControl = trainControl(allowParallel = TRUE), data=training) # Random Forest</code></pre>
-<pre><code>## Loading required package: randomForest
-## randomForest 4.6-12
-## Type rfNews() to see new features/changes/bug fixes.
-## 
-## Attaching package: 'randomForest'
-## 
-## The following object is masked from 'package:dplyr':
-## 
-##     combine</code></pre>
-<pre class="r"><code>fit.rpart</code></pre>
+fit.rf &lt;- train(classe ~ ., method=&quot;rf&quot;, trControl = trainControl(allowParallel = TRUE), data=training) # Random Forest
+fit.rpart</code></pre>
 <pre><code>## CART 
 ## 
 ## 12953 samples
@@ -179,7 +170,7 @@ fit.rf &lt;- train(classe ~ ., method=&quot;rf&quot;, trControl = trainControl(a
 ## 
 ## Accuracy was used to select the optimal model using  the largest value.
 ## The final value used for the model was mtry = 25.</code></pre>
-<p>Confusion matrix is now used with the valiation sete to predict the error of each model.</p>
+<p>The ConfusionMatrix function is now applied to the valiation dataset to determine the accuracy of each model.</p>
 <pre class="r"><code>confusionMatrix(validation$classe, predict(fit.rpart, validation))   # Predict rpart </code></pre>
 <pre><code>## Confusion Matrix and Statistics
 ## 
@@ -244,7 +235,7 @@ fit.rf &lt;- train(classe ~ ., method=&quot;rf&quot;, trControl = trainControl(a
 ## Detection Rate         0.2845   0.1919   0.1729   0.1606   0.1826
 ## Detection Prevalence   0.2845   0.1934   0.1744   0.1639   0.1838
 ## Balanced Accuracy      0.9982   0.9952   0.9872   0.9962   0.9989</code></pre>
-<p>With higher accuracy and specificity, the Random Forest model significantly outperforms the rpart model.</p>
+<p>With higher accuracy and specificity, the Random Forest model significantly outperforms the rpart model. This model is selected for use with the testing dataset.</p>
 </div>
 <div id="testing-dataset-predicition" class="section level2">
 <h2>Testing Dataset Predicition</h2>
