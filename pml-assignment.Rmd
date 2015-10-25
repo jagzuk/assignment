@@ -1,0 +1,146 @@
+---
+title: "Practical Machine Learning"
+author: "R A Jagger (jagzuk)"
+date: "Saturday, October 24, 2015"
+output: html_document
+---
+```{r load_libraries, echo=TRUE, cache=FALSE}
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(caret))
+suppressPackageStartupMessages(library(rpart))
+suppressPackageStartupMessages(library(FSelector))
+```
+
+##Executive Summary
+
+The quantified self movement describes enthusiasts who take measurements about themselves regularly to improve their health or fitness. Whilst people regularly quantify how much of a particular activity they do, they rarely quantify how well they do it. The goal of this assigment is to build a machine learning  model that predicts how well a participant has performed a Weight Lifting Excercise.
+
+The data was downloaded from the source and reviewed for completeness. This revealed that there were 160 columns in the dataset. Using data cleanup and feature selection, this was reduced to 50.
+
+The data was partitioned into training and validation sets, and two models were built using the Recursive Partitioning and Regression Trees (rpart) and Random Forest methods. The Random Forest significantly outperformed the rpart model and was selected for further use.
+
+Answers produced by applying the Random Forest model to the testing data were submitted to Coursera and achieved a 20/20 score.
+
+(Note: The considerable time required to compute the models prevented more extensive evaluation, feature reduction and other optimisations. However the performance of the model was sufficient to accurately predict the 20 test cases and can be consideredd a good example of Practical Machine Learning - i.e. Good Enough!) 
+
+##Getting and Cleaning Data
+The Weight Lifting data used for this report was origninally sourced from the [Human Activity Recognistion Project by LES][1], and consists of a training set and associated test set. The data was collected from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. Each lift has an assigned quality score, which is the classe variable. 
+
+[1]:http://groupware.les.inf.puc-rio.br/har
+
+```{r download_data, echo=FALSE, cache=TRUE}
+   setInternet2(TRUE)
+   url.training <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+   download.file(url = url.training, destfile = "pml-training.csv", mode = "wb")
+   url.testing <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+   download.file(url = url.testing, destfile = "pml-testing.csv", mode = "wb")
+
+```
+
+```{r read.files, echo=TRUE, cache=TRUE}
+pml.training <- read.csv("pml-training.csv", header=T)   # Read training data
+pml.testing <- read.csv("pml-testing.csv", header=T)     # Read testing data
+```
+A summary of the supplied data can be found in the Dataset Structure section of the Appendices. The training set contains 19622 rows and the test set contains 20 rows, each comprising 160 columns.
+
+Inspection shows that some records contain "#DIV/0!" values which may cause computational problems. There are also many empty values and many NAs. The emply and error value have both been replaced with NA. 
+
+With  these adjustments made, further inspection shows that a large number of the columns predominently contain NAs. Since NA values are of no value to the model, these columns have been removed from the dataset, along with timestamps and other non-performance variables.
+
+```{r clean_data, echo=TRUE,cache=TRUE}
+
+# Remove id time-series and window columns
+pml.training <- select(pml.training, -X,-raw_timestamp_part_1,-raw_timestamp_part_2,-cvtd_timestamp,-new_window,-num_window)
+
+# Clean up missing data
+pml.training[pml.training=="#DIV/0!"] <- NA                 # #DIV/o! to NA
+pml.training[pml.training==""] <- NA                        # Empty records to NA
+
+# Identify and remove columns with NAs
+keep <- as.vector(apply(pml.training, 2, function(col) { tot = sum(is.na(col)); return(tot==0); }))
+pml.training.clean <- pml.training[ ,keep]  
+cols.clean <- ncol(pml.training.clean)                      
+cols.clean                                                  # Number of columns in clean training dataset
+```
+
+##Preprocessing  
+###Validation Dataset
+A dataset is requied for model evaluation, so the next task is to create new training and validation datasets. This can be done using **createDataPartion** from the **caret** package:
+
+
+```{r split_dataset, echo=TRUE, cache=TRUE}
+# Partiton the data 2/3 testing 1/3 validation (classe is our "quality"" variable) 
+pml.partition <- createDataPartition(y = pml.training.clean$classe, p=0.66, list = F)
+training <- pml.training.clean[pml.partition, ]              # Create new traning dataset
+validation <- pml.training.clean[-pml.partition, ]           # create validation dataset
+```
+
+##Feature Selection 
+The data cleanup has reduced the columns from 160 to `r cols.clean`, but this still seems a large number of variables for a preduction model, and it is probably worth an attempt to reduce it further. The Information Gain function from the FSelect package can help with this.
+
+```{r pca_routines, echo=TRUE, cache=TRUE}
+col.names <- names(training)[-c(1,dim(training)[2])]
+col.gain <- sapply(col.names, function(pred) { fo = as.formula(paste0("classe ~ ", pred))
+   gain <- information.gain(fo, data = training); return(gain[[1,1]]); })
+model.features <- names(col.gain[col.gain > 0.05])           # Only keep columns with a gain over 0.05
+model.features <- append(model.features,"classe")            # Add back the classe column
+training <- training[ ,model.features]
+validation <- validation[ ,model.features]
+count.features <- ncol(training)
+count.features
+```
+
+This process has reduced the features a little further, leaving `r count.features` columns.
+
+## Model Selection
+Two models are now built, using Recursive Partitioning and Regression Trees (rpart) and Random Forest functions provided in the caret package. This process takes several hours to complete. 
+
+```{r model_selection, echo=TRUE, cache=TRUE}
+fit.rpart <- train(classe ~.,data=training, method="rpart")  # rpart
+fit.rf <- train(classe ~ ., method="rf", trControl = trainControl(allowParallel = TRUE), data=training) # Random Forest
+fit.rpart
+fit.rf
+```
+
+The ConfusionMatrix function is now applied to the valiation dataset to determine the accuracy of each model.
+
+```{r confusion_matrix, echo=TRUE, cache=TRUE}
+confusionMatrix(validation$classe, predict(fit.rpart, validation))   # Predict rpart 
+confusionMatrix(validation$classe, predict(fit.rf, validation))      # Predict Ransom Forest
+
+```
+
+With higher accuracy and specificity, the Random Forest model significantly outperforms the rpart model. This model is selected for use with the testing dataset.
+
+## Testing Dataset Predicition
+```{r predict_classe, echo=TRUE, cache=TRUE}
+answers <- predict(fit.rf, pml.testing)
+answers
+```
+The above predictions scored 20/20 through the Coursera online marking system.
+
+##Appendices
+
+###Dataset Structure
+```{r explore_1, echo=TRUE,cache=TRUE} 
+dim(pml.training)                               # Dimensions of training set               
+dim(pml.testing)                                # Dimensions of testing set
+sum(complete.cases(pml.training))               # Complete training cases
+sum(!complete.cases(pml.training))              # Incomplete training  cases
+colnames(pml.training)                          # Original column names
+colnames(training)                              # Selected features
+```
+
+###Submission Code
+
+```{r submission, echo=TRUE, cache=TRUE}
+# answers = rep("A", 20)              
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+pml_write_files(answers) # uncomment to write submission files
+```
